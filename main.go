@@ -207,6 +207,29 @@ func insert() {
 	}
 	end = time.Now()
 	fmt.Println("Method-5 DB Transaction within the Loop. total time = ", end.Sub(start).Seconds())
+
+	// Method-6 Insert with multiple VALUES sets.
+	start = time.Now()
+	sqlStr := "INSERT INTO `users` (`id`, `name`, `age`) VALUES "
+	vals := []interface{}{}
+	for i := size*6 + 1; i <= size*7; i++ {
+		sqlStr += "(?, ?, ?),"
+		vals = append(vals, i, "user"+strconv.Itoa(i), i)
+	}
+	//trim the last ,
+	sqlStr = sqlStr[0 : len(sqlStr)-1]
+	stmt, err := db.Prepare(sqlStr)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	_, err = stmt.Exec(vals...)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	end = time.Now()
+	fmt.Println("Method-6 Insert with multiple VALUES sets. total time = ", end.Sub(start).Seconds())
 }
 
 func update() {
@@ -309,6 +332,25 @@ func update() {
 	end = time.Now()
 	fmt.Println("Method-5 DB Transaction within the loop. total time = ", end.Sub(start).Seconds())
 
+	// Method-6 UPDATE with duplicate keys.
+	start = time.Now()
+	sqlStr := "INSERT INTO `users` (`id`, `name`, `age`) VALUES "
+	vals := []interface{}{}
+	for i := size*6 + 1; i <= size*7; i++ {
+		sqlStr += "(?, ?, ?),"
+		vals = append(vals, i, "user"+strconv.Itoa(i), i)
+	}
+	//trim the last ,
+	sqlStr = sqlStr[0:len(sqlStr)-1] + ""
+	sqlStr += "ON DUPLICATE KEY UPDATE `name`=CONCAT(VALUES(`name`), '-up'), `age`=VALUES(`age`)+1;"
+	stmt, _ := db.Prepare(sqlStr)
+	_, err = stmt.Exec(vals...)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	end = time.Now()
+	fmt.Println("Method-6 UPDATE with duplicate keys. total time = ", end.Sub(start).Seconds())
 }
 
 func delete() {
@@ -413,4 +455,26 @@ func delete() {
 	}
 	end = time.Now()
 	fmt.Println("Method-5 DB Transaction within the loop. total time = ", end.Sub(start).Seconds())
+
+	// Method-6 Just Delete
+	start = time.Now()
+	tx, err = db.Begin()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	for i := size*6 + 1; i <= size*7; i++ {
+		_, err := tx.Exec("DELETE FROM users WHERE `id` = ?", i)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	end = time.Now()
+	fmt.Println("Method-6 Just Delete. total time = ", end.Sub(start).Seconds())
 }

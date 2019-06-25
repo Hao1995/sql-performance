@@ -3,8 +3,10 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Hao1995/sql-performance/glob"
@@ -29,19 +31,48 @@ func init() {
 	dbTmp, err := sql.Open("mysql", glob.CfgData.Mysql.User+":"+glob.CfgData.Mysql.Password+"@tcp("+glob.CfgData.Mysql.Host+":"+glob.CfgData.Mysql.Port+")/"+glob.CfgData.Mysql.Name)
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	log.Print(glob.CfgData)
 
 	db = dbTmp
+
 }
 
 func main() {
+	createSchema()
+	truncate()
 	insert()
 	query()
 	update()
 	query()
 	delete()
+}
+
+func createSchema() {
+	dir := "./sql/create/"
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, f := range files {
+
+		file, err := ioutil.ReadFile(dir + f.Name())
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		requests := strings.Split(string(file), ";")
+		for _, request := range requests {
+			if request == "" {
+				continue
+			}
+			_, err := db.Exec(request)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
 }
 
 func query() {
@@ -52,7 +83,6 @@ func query() {
 	rows, err := db.Query("SELECT `id`, `name`, `age` FROM users")
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -60,7 +90,6 @@ func query() {
 		if err := rows.Scan(&item.id, &item.name, &item.age); err != nil {
 			log.Fatal(err)
 		}
-		// fmt.Printf("%+v\n", item)
 	}
 	end := time.Now()
 	fmt.Println("Method-1 db.Query. total time = ", end.Sub(start).Seconds())
@@ -70,13 +99,11 @@ func query() {
 	stm, err := db.Prepare("SELECT `id`, `name`, `age` FROM users")
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	defer stm.Close()
 	rows, err = stm.Query()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -93,13 +120,11 @@ func query() {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	defer tx.Commit()
 	rows, err = tx.Query("SELECT `id`, `name`, `age` FROM users")
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -122,7 +147,6 @@ func insert() {
 		_, err := db.Exec("INSERT INTO `users`(`id`, `name`, `age`) values(?, ?, ?)", i, "user"+strconv.Itoa(i), i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end := time.Now()
@@ -135,12 +159,10 @@ func insert() {
 		stm, err := db.Prepare("INSERT INTO `users`(`id`, `name`, `age`) values(?, ?, ?)")
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		_, err = stm.Exec(i, "user"+strconv.Itoa(i), i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		stm.Close()
 	}
@@ -152,14 +174,12 @@ func insert() {
 	stm, err := db.Prepare("INSERT INTO `users`(`id`, `name`, `age`) values(?, ?, ?)")
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*3 + 1; i <= size*4; i++ {
 		// Why it's performance so bad even the Exec function do not new a connection.
 		_, err := stm.Exec(i, "user"+strconv.Itoa(i), i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	stm.Close()
@@ -171,14 +191,12 @@ func insert() {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*4 + 1; i <= size*5; i++ {
 		// No new a connection within 'tx'. High performance
 		_, err := tx.Exec("INSERT INTO `users`(`id`, `name`, `age`) values(?, ?, ?)", i, "user"+strconv.Itoa(i), i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	tx.Commit()
@@ -192,17 +210,14 @@ func insert() {
 		tx, err := db.Begin()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		_, err = tx.Exec("INSERT INTO `users`(`id`, `name`, `age`) values(?, ?, ?)", i, "user"+strconv.Itoa(i), i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		err = tx.Commit()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end = time.Now()
@@ -221,12 +236,10 @@ func insert() {
 	stmt, err := db.Prepare(sqlStr)
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	_, err = stmt.Exec(vals...)
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	end = time.Now()
 	fmt.Println("Method-6 Insert with multiple VALUES sets. total time = ", end.Sub(start).Seconds())
@@ -241,7 +254,6 @@ func update() {
 		_, err := db.Exec("UPDATE `users` SET `name`=?, `age`=? WHERE `id` = ?", "user"+strconv.Itoa(i), i, i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end := time.Now()
@@ -253,17 +265,14 @@ func update() {
 		stm, err := db.Prepare("UPDATE `users` SET `name`=?, `age`=? WHERE `id` = ?")
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		_, err = stm.Exec("user"+strconv.Itoa(i), i, i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		err = stm.Close()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end = time.Now()
@@ -274,13 +283,11 @@ func update() {
 	stm, err := db.Prepare("UPDATE `users` SET `name`=?, `age`=? WHERE `id` = ?")
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*3 + 1; i <= size*4; i++ {
 		_, err := stm.Exec("user"+strconv.Itoa(i), i, i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	stm.Close()
@@ -292,19 +299,16 @@ func update() {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*4 + 1; i <= size*5; i++ {
 		_, err := tx.Exec("UPDATE `users` SET `name`=?, `age`=? WHERE `id` = ?", "user"+strconv.Itoa(i), i, i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 
 	end = time.Now()
@@ -316,17 +320,14 @@ func update() {
 		tx, err := db.Begin()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		_, err = tx.Exec("UPDATE `users` SET `name`=?, `age`=? WHERE `id` = ?", "user"+strconv.Itoa(i), i, i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		err = tx.Commit()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end = time.Now()
@@ -347,7 +348,6 @@ func update() {
 	_, err = stmt.Exec(vals...)
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	end = time.Now()
 	fmt.Println("Method-6 UPDATE with duplicate keys. total time = ", end.Sub(start).Seconds())
@@ -362,7 +362,6 @@ func delete() {
 		_, err := db.Exec("DELETE FROM users WHERE `id` = ?", i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end := time.Now()
@@ -374,17 +373,14 @@ func delete() {
 		stm, err := db.Prepare("DELETE FROM users WHERE `id` = ?")
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		_, err = stm.Exec(i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		err = stm.Close()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end = time.Now()
@@ -395,19 +391,16 @@ func delete() {
 	stm, err := db.Prepare("DELETE FROM users WHERE `id` = ?")
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*3 + 1; i <= size*4; i++ {
 		_, err := stm.Exec(i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	err = stm.Close()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	end = time.Now()
 	fmt.Println("Method-3 Prepare. Then Exec within the loop. total time = ", end.Sub(start).Seconds())
@@ -417,19 +410,16 @@ func delete() {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*4 + 1; i <= size*5; i++ {
 		_, err := tx.Exec("DELETE FROM users WHERE `id` = ?", i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	end = time.Now()
 	fmt.Println("Method-4 db Transaction. Exec Delete within the loop. total time = ", end.Sub(start).Seconds())
@@ -440,17 +430,14 @@ func delete() {
 		tx, err := db.Begin()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		_, err = tx.Exec("DELETE FROM users WHERE `id` = ?", i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 		err = tx.Commit()
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	end = time.Now()
@@ -461,20 +448,26 @@ func delete() {
 	tx, err = db.Begin()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	for i := size*6 + 1; i <= size*7; i++ {
 		_, err := tx.Exec("DELETE FROM users WHERE `id` = ?", i)
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
-		return
 	}
 	end = time.Now()
 	fmt.Println("Method-6 Just Delete. total time = ", end.Sub(start).Seconds())
+}
+
+func truncate() {
+	fmt.Println("[Truncate]")
+	res, err := db.Exec("truncate table `users`")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(res.RowsAffected())
 }

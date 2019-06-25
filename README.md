@@ -2,6 +2,7 @@
 Do more different tests based on https://studygolang.com/articles/3022
 
 ## Result
+Each insert and update has size 100.   
 [Insert]   
 Method-1 Exec within the loop total time =  0.3380945(s)   
 Method-2 Prepare and Exec within the loop. total time =  0.3410885(s)   
